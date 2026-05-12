@@ -1,0 +1,74 @@
+# -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_all, collect_data_files, copy_metadata
+datas = []
+binaries = []
+hiddenimports = []
+for package in [
+    "sentence_transformers",
+    "transformers",
+    "huggingface_hub",
+    "sklearn",
+    "scipy",
+    "torch",
+    "faiss",
+]:
+    package_datas, package_binaries, package_hiddenimports = collect_all(package)
+    datas += package_datas
+    binaries += package_binaries
+    hiddenimports += package_hiddenimports
+for package in [
+    "sentence-transformers",
+    "transformers",
+    "huggingface-hub",
+    "tokenizers",
+    "safetensors",
+    "torch",
+    "faiss-cpu",
+    "numpy",
+    "scikit-learn",
+    "scipy",
+]:
+    try:
+        datas += copy_metadata(package)
+    except Exception:
+        pass
+a = Analysis(
+    ["app.py"],
+    pathex=[],
+    binaries=binaries,
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    optimize=0,
+)
+pyz = PYZ(a.pure)
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name="SemanticFileSearch",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name="SemanticFileSearch",
+)
