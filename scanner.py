@@ -25,6 +25,10 @@ class FileRecord:
         stem = Path(self.name).stem.replace("_", " ").replace("-", " ")
         return expand_text_for_search(f"{stem} {self.extension} {self.parent}")
 
+    @property
+    def search_text(self) -> str:
+        return self.semantic_text
+
 
 def available_windows_drives() -> list[str]:
     drives = []

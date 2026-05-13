@@ -140,29 +140,32 @@ def _literal_search(
     limit: int,
 ) -> list[dict]:
     literal = query.strip().lower()
-    escaped = (
-        literal
-        .replace("\\", "\\\\")
-        .replace("%", "\\%")
-        .replace("_", "\\_")
-    )
-    pattern = f"%{escaped}%"
+    terms = _query_terms(query)
+    search_text_clauses = " OR ".join("LOWER(search_text) LIKE ? ESCAPE '\\'" for _ in terms)
+    search_text_sql = f" OR {search_text_clauses}" if search_text_clauses else ""
+    literal_pattern = _like_pattern(literal)
+    term_patterns = [_like_pattern(term) for term in terms]
     filter_sql = f"AND {where_sql[6:]}" if where_sql else ""
     rows = conn.execute(
         f"""
         SELECT path, name, extension, drive, parent, size_bytes, modified_ts, id
         FROM files
-        WHERE (LOWER(name) LIKE ? ESCAPE '\\' OR LOWER(path) LIKE ? ESCAPE '\\') {filter_sql}
+        WHERE (
+            LOWER(name) LIKE ? ESCAPE '\\'
+            OR LOWER(path) LIKE ? ESCAPE '\\'
+            {search_text_sql}
+        ) {filter_sql}
         ORDER BY
             CASE
                 WHEN LOWER(name) = ? THEN 0
                 WHEN LOWER(name) LIKE ? ESCAPE '\\' THEN 1
-                ELSE 2
+                WHEN LOWER(search_text) LIKE ? ESCAPE '\\' THEN 2
+                ELSE 3
             END,
             modified_ts DESC
         LIMIT ?
         """,
-        [pattern, pattern, *params, literal, pattern, limit],
+        [literal_pattern, literal_pattern, *term_patterns, *params, literal, literal_pattern, literal_pattern, limit],
     ).fetchall()
 
     results = []
@@ -171,6 +174,29 @@ def _literal_search(
         item["id"] = int(row[-1])
         results.append(item)
     return results
+
+
+def _query_terms(query: str) -> list[str]:
+    expanded = expand_text_for_search(query).lower()
+    raw_terms = [query.strip().lower(), *expanded.split()]
+    terms = []
+    seen = set()
+    for term in raw_terms:
+        if not term or term in seen:
+            continue
+        seen.add(term)
+        terms.append(term)
+    return terms[:12]
+
+
+def _like_pattern(value: str) -> str:
+    escaped = (
+        value
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
+    return f"%{escaped}%"
 
 
 def load_semantic_index() -> tuple[faiss.Index, np.ndarray]:

@@ -33,9 +33,9 @@ COMMON_FILE_TYPES = [
 class FileSearchApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("Semantic File Search")
-        self.geometry("1120x720")
-        self.minsize(920, 560)
+        self.title("文件快速搜索")
+        self.geometry("1280x760")
+        self.minsize(1040, 600)
 
         self.selected_roots = available_windows_drives()
         self.drive_var = tk.StringVar(value="Any")
@@ -44,7 +44,7 @@ class FileSearchApp(tk.Tk):
         self.min_size_var = tk.StringVar()
         self.max_size_var = tk.StringVar()
         self.query_var = tk.StringVar()
-        self.status_var = tk.StringVar(value="Ready")
+        self.status_var = tk.StringVar(value="就绪")
 
         self._build_ui()
         self.refresh_filter_options()
@@ -53,44 +53,45 @@ class FileSearchApp(tk.Tk):
         controls = ttk.Frame(self, padding=12)
         controls.pack(fill=tk.X)
 
-        ttk.Label(controls, text="Name semantic query").grid(row=0, column=0, sticky="w")
-        query_entry = ttk.Entry(controls, textvariable=self.query_var, width=44)
-        query_entry.grid(row=1, column=0, padx=(0, 10), sticky="ew")
+        ttk.Label(controls, text="文件名称 / 拼音 / 关键词").grid(row=0, column=0, columnspan=9, sticky="w")
+        query_entry = ttk.Entry(controls, textvariable=self.query_var)
+        query_entry.grid(row=1, column=0, columnspan=9, padx=(0, 0), pady=(0, 10), sticky="ew")
         query_entry.bind("<Return>", lambda _event: self.run_search())
 
-        ttk.Label(controls, text="Disk location").grid(row=0, column=1, sticky="w")
+        ttk.Label(controls, text="磁盘位置").grid(row=2, column=0, sticky="w")
         self.drive_combo = ttk.Combobox(controls, textvariable=self.drive_var, state="readonly", width=16)
-        self.drive_combo.grid(row=1, column=1, padx=(0, 10), sticky="ew")
+        self.drive_combo.grid(row=3, column=0, padx=(0, 10), sticky="ew")
 
-        ttk.Label(controls, text="File type").grid(row=0, column=2, sticky="w")
+        ttk.Label(controls, text="文件类型").grid(row=2, column=1, sticky="w")
         self.extension_combo = ttk.Combobox(controls, textvariable=self.extension_var, state="readonly", width=16)
-        self.extension_combo.grid(row=1, column=2, padx=(0, 10), sticky="ew")
+        self.extension_combo.grid(row=3, column=1, padx=(0, 10), sticky="ew")
         self.extension_combo.bind("<<ComboboxSelected>>", lambda _event: self.toggle_custom_extension())
 
-        ttk.Label(controls, text="Other type").grid(row=0, column=3, sticky="w")
+        ttk.Label(controls, text="其他类型").grid(row=2, column=2, sticky="w")
         self.custom_extension_entry = ttk.Entry(controls, textvariable=self.custom_extension_var, width=10, state="disabled")
-        self.custom_extension_entry.grid(row=1, column=3, padx=(0, 10))
+        self.custom_extension_entry.grid(row=3, column=2, padx=(0, 10), sticky="ew")
 
-        ttk.Label(controls, text="Min MB").grid(row=0, column=4, sticky="w")
-        ttk.Entry(controls, textvariable=self.min_size_var, width=10).grid(row=1, column=4, padx=(0, 10))
+        ttk.Label(controls, text="最小 MB").grid(row=2, column=3, sticky="w")
+        ttk.Entry(controls, textvariable=self.min_size_var, width=10).grid(row=3, column=3, padx=(0, 10), sticky="ew")
 
-        ttk.Label(controls, text="Max MB").grid(row=0, column=5, sticky="w")
-        ttk.Entry(controls, textvariable=self.max_size_var, width=10).grid(row=1, column=5, padx=(0, 10))
+        ttk.Label(controls, text="最大 MB").grid(row=2, column=4, sticky="w")
+        ttk.Entry(controls, textvariable=self.max_size_var, width=10).grid(row=3, column=4, padx=(0, 10), sticky="ew")
 
-        ttk.Button(controls, text="Search", command=self.run_search).grid(row=1, column=6, padx=(0, 8))
-        ttk.Button(controls, text="Choose folders", command=self.choose_roots).grid(row=1, column=7, padx=(0, 8))
-        ttk.Button(controls, text="Scan / Rebuild index", command=self.start_indexing).grid(row=1, column=8)
+        ttk.Button(controls, text="搜索", command=self.run_search).grid(row=3, column=5, padx=(0, 8), sticky="ew")
+        ttk.Button(controls, text="选择文件夹", command=self.choose_roots).grid(row=3, column=6, padx=(0, 8), sticky="ew")
+        ttk.Button(controls, text="扫描 / 重建索引", command=self.start_indexing).grid(row=3, column=7, columnspan=2, sticky="ew")
 
         controls.columnconfigure(0, weight=1)
+        controls.columnconfigure(8, weight=1)
 
         columns = ("name", "extension", "drive", "size_mb", "score", "path")
         self.tree = ttk.Treeview(self, columns=columns, show="headings")
-        self.tree.heading("name", text="Name")
-        self.tree.heading("extension", text="Type")
-        self.tree.heading("drive", text="Disk")
-        self.tree.heading("size_mb", text="Size MB")
-        self.tree.heading("score", text="Score")
-        self.tree.heading("path", text="Path")
+        self.tree.heading("name", text="文件名")
+        self.tree.heading("extension", text="类型")
+        self.tree.heading("drive", text="磁盘")
+        self.tree.heading("size_mb", text="大小 MB")
+        self.tree.heading("score", text="匹配度")
+        self.tree.heading("path", text="路径")
         self.tree.column("name", width=230)
         self.tree.column("extension", width=80)
         self.tree.column("drive", width=80)
@@ -123,42 +124,42 @@ class FileSearchApp(tk.Tk):
             self.custom_extension_entry.configure(state="disabled")
 
     def choose_roots(self) -> None:
-        folder = filedialog.askdirectory(title="Choose a folder to scan")
+        folder = filedialog.askdirectory(title="选择需要扫描的文件夹")
         if folder:
             self.selected_roots = [folder]
-            self.status_var.set(f"Selected scan root: {folder}")
+            self.status_var.set(f"已选择扫描目录：{folder}")
 
     def start_indexing(self) -> None:
-        self.status_var.set("Scanning files and building FAISS index...")
+        self.status_var.set("正在扫描文件并重建索引...")
         thread = threading.Thread(target=self._index_worker, daemon=True)
         thread.start()
 
     def _index_worker(self) -> None:
         def progress(count: int, path: str) -> None:
-            self.after(0, lambda: self.status_var.set(f"Indexed {count} files: {path}"))
+            self.after(0, lambda: self.status_var.set(f"已索引 {count} 个文件：{path}"))
 
         try:
             total = build_index(roots=self.selected_roots, progress=progress)
         except Exception as exc:
-            self.after(0, lambda: messagebox.showerror("Indexing failed", str(exc)))
-            self.after(0, lambda: self.status_var.set("Indexing failed"))
+            self.after(0, lambda: messagebox.showerror("索引失败", str(exc)))
+            self.after(0, lambda: self.status_var.set("索引失败"))
             return
 
         clear_semantic_cache()
         self.after(0, self.refresh_filter_options)
-        self.after(0, lambda: self.status_var.set(f"Index ready: {total} files"))
+        self.after(0, lambda: self.status_var.set(f"索引完成：{total} 个文件"))
 
     def run_search(self) -> None:
         try:
             min_size = self._parse_optional_float(self.min_size_var.get())
             max_size = self._parse_optional_float(self.max_size_var.get())
         except ValueError:
-            messagebox.showerror("Invalid filter", "Size filters must be numbers.")
+            messagebox.showerror("筛选条件错误", "文件大小必须是数字。")
             return
 
         extension = self.get_selected_extension()
         if extension == "INVALID":
-            messagebox.showerror("Invalid filter", "Other file type should look like .md or .json.")
+            messagebox.showerror("筛选条件错误", "其他文件类型请填写类似 .md 或 .json 的格式。")
             return
 
         filters = SearchFilters(
@@ -168,14 +169,14 @@ class FileSearchApp(tk.Tk):
             max_size_mb=max_size,
         )
 
-        self.status_var.set("Searching...")
+        self.status_var.set("正在搜索...")
         self.update_idletasks()
 
         try:
             results = search_files(self.query_var.get(), filters=filters, limit=100)
         except Exception as exc:
-            messagebox.showerror("Search failed", str(exc))
-            self.status_var.set("Search failed")
+            messagebox.showerror("搜索失败", str(exc))
+            self.status_var.set("搜索失败")
             return
 
         self.tree.delete(*self.tree.get_children())
@@ -193,9 +194,9 @@ class FileSearchApp(tk.Tk):
                 ),
             )
         if results:
-            self.status_var.set(f"{len(results)} results")
+            self.status_var.set(f"找到 {len(results)} 条结果")
         else:
-            self.status_var.set("0 results. If this is the first run, choose a folder and click Scan / Rebuild index.")
+            self.status_var.set("没有结果。首次使用请先选择文件夹并点击“扫描 / 重建索引”。")
 
     def open_selected_file(self, _event: tk.Event) -> None:
         selected = self.tree.selection()
@@ -208,7 +209,7 @@ class FileSearchApp(tk.Tk):
             else:
                 os.startfile(path)
         except Exception as exc:
-            messagebox.showerror("Open failed", str(exc))
+            messagebox.showerror("打开位置失败", str(exc))
 
     @staticmethod
     def _parse_optional_float(value: str) -> float | None:

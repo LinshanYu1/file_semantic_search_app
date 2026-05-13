@@ -28,12 +28,17 @@ def connect_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
             drive TEXT NOT NULL,
             parent TEXT NOT NULL,
             size_bytes INTEGER NOT NULL,
-            modified_ts REAL NOT NULL
+            modified_ts REAL NOT NULL,
+            search_text TEXT NOT NULL DEFAULT ''
         )
     """)
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(files)")}
+    if "search_text" not in columns:
+        conn.execute("ALTER TABLE files ADD COLUMN search_text TEXT NOT NULL DEFAULT ''")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_files_extension ON files(extension)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_files_drive ON files(drive)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_files_size ON files(size_bytes)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_files_search_text ON files(search_text)")
     return conn
 
 
@@ -54,8 +59,8 @@ def save_records(conn: sqlite3.Connection, records: Iterable[FileRecord]) -> lis
         cursor = conn.execute(
             """
             INSERT OR REPLACE INTO files
-            (path, name, extension, drive, parent, size_bytes, modified_ts)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (path, name, extension, drive, parent, size_bytes, modified_ts, search_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.path,
@@ -65,6 +70,7 @@ def save_records(conn: sqlite3.Connection, records: Iterable[FileRecord]) -> lis
                 record.parent,
                 record.size_bytes,
                 record.modified_ts,
+                record.search_text.lower(),
             ),
         )
         ids.append(int(cursor.lastrowid))
