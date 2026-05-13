@@ -4,12 +4,8 @@ datas = []
 binaries = []
 hiddenimports = []
 for package in [
-    "sentence_transformers",
-    "transformers",
-    "huggingface_hub",
     "sklearn",
     "scipy",
-    "torch",
     "faiss",
 ]:
     package_datas, package_binaries, package_hiddenimports = collect_all(package)
@@ -17,12 +13,6 @@ for package in [
     binaries += package_binaries
     hiddenimports += package_hiddenimports
 for package in [
-    "sentence-transformers",
-    "transformers",
-    "huggingface-hub",
-    "tokenizers",
-    "safetensors",
-    "torch",
     "faiss-cpu",
     "numpy",
     "scikit-learn",

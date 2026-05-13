@@ -1,4 +1,4 @@
 faiss-cpu>=1.8.0
 numpy>=1.26.0
-sentence-transformers>=2.7.0
+scikit-learn>=1.4.0
 pyinstaller>=6.0.0

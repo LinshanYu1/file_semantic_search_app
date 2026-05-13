@@ -6,7 +6,6 @@ DB_PATH = APP_DIR / "files.db"
 FAISS_PATH = APP_DIR / "files.faiss"
 IDS_PATH = APP_DIR / "faiss_ids.npy"
 
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 DEFAULT_SKIP_DIR_NAMES = {
     "$recycle.bin",

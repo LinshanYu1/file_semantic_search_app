@@ -6,9 +6,10 @@ from typing import Callable, Iterable
 
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from embedder import embed_texts
 
-from config import APP_DIR, DB_PATH, EMBEDDING_MODEL, FAISS_PATH, IDS_PATH
+
+from config import APP_DIR, DB_PATH, FAISS_PATH, IDS_PATH
 from scanner import FileRecord, iter_files
 
 
@@ -76,7 +77,6 @@ def build_index(
     progress: ProgressCallback | None = None,
 ) -> int:
     conn = reset_storage()
-    model = SentenceTransformer(EMBEDDING_MODEL)
     index = None
     all_ids: list[int] = []
     batch_records: list[FileRecord] = []
@@ -89,8 +89,7 @@ def build_index(
 
         ids = save_records(conn, batch_records)
         texts = [record.semantic_text for record in batch_records]
-        vectors = model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
-        vectors = np.asarray(vectors, dtype="float32")
+        vectors = embed_texts(texts)
 
         if index is None:
             index = faiss.IndexFlatIP(vectors.shape[1])

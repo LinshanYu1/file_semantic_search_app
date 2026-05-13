@@ -5,15 +5,15 @@ from dataclasses import dataclass
 
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from config import FAISS_PATH, IDS_PATH
+from embedder import embed_texts
 
-from config import EMBEDDING_MODEL, FAISS_PATH, IDS_PATH
 from indexer import connect_db
 
 
-_MODEL: SentenceTransformer | None = None
 _INDEX: faiss.Index | None = None
 _IDS: np.ndarray | None = None
+
 
 
 @dataclass(frozen=True)
@@ -87,10 +87,8 @@ def search_files(
     if not FAISS_PATH.exists() or not IDS_PATH.exists():
         conn.close()
         return []
-
-    model, index, ids = load_semantic_index()
-    vector = model.encode([query], normalize_embeddings=True, show_progress_bar=False)
-    vector = np.asarray(vector, dtype="float32")
+    index, ids = load_semantic_index()
+    vector = embed_texts([query])
     scores, positions = index.search(vector, min(semantic_pool, index.ntotal))
 
     semantic_hits = []
@@ -126,15 +124,14 @@ def search_files(
     return sorted(results, key=lambda item: item["score"], reverse=True)[:limit]
 
 
-def load_semantic_index() -> tuple[SentenceTransformer, faiss.Index, np.ndarray]:
-    global _MODEL, _INDEX, _IDS
-    if _MODEL is None:
-        _MODEL = SentenceTransformer(EMBEDDING_MODEL)
+def load_semantic_index() -> tuple[faiss.Index, np.ndarray]:
+    global _INDEX, _IDS
     if _INDEX is None:
         _INDEX = faiss.read_index(str(FAISS_PATH))
     if _IDS is None:
         _IDS = np.load(IDS_PATH)
-    return _MODEL, _INDEX, _IDS
+    return _INDEX, _IDS
+
 
 
 def clear_semantic_cache() -> None:
