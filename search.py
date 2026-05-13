@@ -7,6 +7,7 @@ import faiss
 import numpy as np
 from config import FAISS_PATH, IDS_PATH
 from embedder import embed_texts
+from text_utils import expand_text_for_search
 
 from indexer import connect_db
 
@@ -84,11 +85,14 @@ def search_files(
         conn.close()
         return [_row_to_dict(row) for row in rows]
 
+    literal_results = _literal_search(conn, query, where_sql, params, limit)
+
     if not FAISS_PATH.exists() or not IDS_PATH.exists():
         conn.close()
-        return []
+        return [_drop_internal_id(item) for item in literal_results]
+
     index, ids = load_semantic_index()
-    vector = embed_texts([query])
+    vector = embed_texts([expand_text_for_search(query)])
     scores, positions = index.search(vector, min(semantic_pool, index.ntotal))
 
     semantic_hits = []
@@ -99,7 +103,7 @@ def search_files(
 
     if not semantic_hits:
         conn.close()
-        return []
+        return [_drop_internal_id(item) for item in literal_results]
 
     score_by_id = dict(semantic_hits)
     placeholders = ",".join("?" for _ in semantic_hits)
@@ -115,13 +119,58 @@ def search_files(
     ).fetchall()
     conn.close()
 
+    literal_ids = {item["id"] for item in literal_results}
     results = []
     for row in rows:
+        if row[-1] in literal_ids:
+            continue
         score = score_by_id.get(int(row[-1]), 0.0)
         item = _row_to_dict((*row[:-1], score))
         results.append(item)
 
-    return sorted(results, key=lambda item: item["score"], reverse=True)[:limit]
+    merged = literal_results + sorted(results, key=lambda item: item["score"], reverse=True)
+    return [_drop_internal_id(item) for item in merged[:limit]]
+
+
+def _literal_search(
+    conn: sqlite3.Connection,
+    query: str,
+    where_sql: str,
+    params: list[object],
+    limit: int,
+) -> list[dict]:
+    literal = query.strip().lower()
+    escaped = (
+        literal
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
+    pattern = f"%{escaped}%"
+    filter_sql = f"AND {where_sql[6:]}" if where_sql else ""
+    rows = conn.execute(
+        f"""
+        SELECT path, name, extension, drive, parent, size_bytes, modified_ts, id
+        FROM files
+        WHERE (LOWER(name) LIKE ? ESCAPE '\\' OR LOWER(path) LIKE ? ESCAPE '\\') {filter_sql}
+        ORDER BY
+            CASE
+                WHEN LOWER(name) = ? THEN 0
+                WHEN LOWER(name) LIKE ? ESCAPE '\\' THEN 1
+                ELSE 2
+            END,
+            modified_ts DESC
+        LIMIT ?
+        """,
+        [pattern, pattern, *params, literal, pattern, limit],
+    ).fetchall()
+
+    results = []
+    for row in rows:
+        item = _row_to_dict((*row[:-1], 1.0))
+        item["id"] = int(row[-1])
+        results.append(item)
+    return results
 
 
 def load_semantic_index() -> tuple[faiss.Index, np.ndarray]:
@@ -152,3 +201,9 @@ def _row_to_dict(row: tuple) -> dict:
         "modified_ts": modified_ts,
         "score": round(float(score), 4),
     }
+
+
+def _drop_internal_id(item: dict) -> dict:
+    item = dict(item)
+    item.pop("id", None)
+    return item

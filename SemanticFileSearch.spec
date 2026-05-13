@@ -7,6 +7,7 @@ for package in [
     "sklearn",
     "scipy",
     "faiss",
+    "pypinyin",
 ]:
     package_datas, package_binaries, package_hiddenimports = collect_all(package)
     datas += package_datas
@@ -17,6 +18,7 @@ for package in [
     "numpy",
     "scikit-learn",
     "scipy",
+    "pypinyin",
 ]:
     try:
         datas += copy_metadata(package)

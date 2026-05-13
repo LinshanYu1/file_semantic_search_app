@@ -104,7 +104,7 @@ class FileSearchApp(tk.Tk):
         status.pack(fill=tk.X)
 
     def refresh_filter_options(self) -> None:
-        drives = available_windows_drives()
+        drives = [self.normalize_drive_filter(drive) for drive in available_windows_drives()]
 
         self.drive_combo["values"] = ["Any", *drives]
         self.extension_combo["values"] = COMMON_FILE_TYPES
@@ -162,7 +162,7 @@ class FileSearchApp(tk.Tk):
             return
 
         filters = SearchFilters(
-            drive=None if self.drive_var.get() == "Any" else self.drive_var.get(),
+            drive=None if self.drive_var.get() == "Any" else self.normalize_drive_filter(self.drive_var.get()),
             extension=extension,
             min_size_mb=min_size,
             max_size_mb=max_size,
@@ -230,6 +230,10 @@ class FileSearchApp(tk.Tk):
         if not custom.startswith(".") or len(custom) < 2:
             return "INVALID"
         return custom
+
+    @staticmethod
+    def normalize_drive_filter(value: str) -> str:
+        return value.rstrip("\\/")
 
 
 if __name__ == "__main__":

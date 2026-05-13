@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Iterable, Iterator
 
 from config import DEFAULT_SKIP_DIR_NAMES
+from text_utils import expand_text_for_search
 
 
 @dataclass(frozen=True)
@@ -22,7 +23,7 @@ class FileRecord:
     @property
     def semantic_text(self) -> str:
         stem = Path(self.name).stem.replace("_", " ").replace("-", " ")
-        return f"{stem} {self.extension} {self.parent}"
+        return expand_text_for_search(f"{stem} {self.extension} {self.parent}")
 
 
 def available_windows_drives() -> list[str]:
