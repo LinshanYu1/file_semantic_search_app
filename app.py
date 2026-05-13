@@ -1,13 +1,33 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from indexer import build_index, connect_db
+from indexer import build_index
 from scanner import available_windows_drives
-from search import SearchFilters, clear_semantic_cache, list_filter_options, search_files
+from search import SearchFilters, clear_semantic_cache, search_files
+
+
+COMMON_FILE_TYPES = [
+    "Any",
+    ".pdf",
+    ".docx",
+    ".doc",
+    ".xlsx",
+    ".xls",
+    ".pptx",
+    ".ppt",
+    ".txt",
+    ".csv",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".zip",
+    "Other",
+]
 
 
 class FileSearchApp(tk.Tk):
@@ -20,6 +40,7 @@ class FileSearchApp(tk.Tk):
         self.selected_roots = available_windows_drives()
         self.drive_var = tk.StringVar(value="Any")
         self.extension_var = tk.StringVar(value="Any")
+        self.custom_extension_var = tk.StringVar()
         self.min_size_var = tk.StringVar()
         self.max_size_var = tk.StringVar()
         self.query_var = tk.StringVar()
@@ -44,16 +65,21 @@ class FileSearchApp(tk.Tk):
         ttk.Label(controls, text="File type").grid(row=0, column=2, sticky="w")
         self.extension_combo = ttk.Combobox(controls, textvariable=self.extension_var, state="readonly", width=16)
         self.extension_combo.grid(row=1, column=2, padx=(0, 10), sticky="ew")
+        self.extension_combo.bind("<<ComboboxSelected>>", lambda _event: self.toggle_custom_extension())
 
-        ttk.Label(controls, text="Min MB").grid(row=0, column=3, sticky="w")
-        ttk.Entry(controls, textvariable=self.min_size_var, width=10).grid(row=1, column=3, padx=(0, 10))
+        ttk.Label(controls, text="Other type").grid(row=0, column=3, sticky="w")
+        self.custom_extension_entry = ttk.Entry(controls, textvariable=self.custom_extension_var, width=10, state="disabled")
+        self.custom_extension_entry.grid(row=1, column=3, padx=(0, 10))
 
-        ttk.Label(controls, text="Max MB").grid(row=0, column=4, sticky="w")
-        ttk.Entry(controls, textvariable=self.max_size_var, width=10).grid(row=1, column=4, padx=(0, 10))
+        ttk.Label(controls, text="Min MB").grid(row=0, column=4, sticky="w")
+        ttk.Entry(controls, textvariable=self.min_size_var, width=10).grid(row=1, column=4, padx=(0, 10))
 
-        ttk.Button(controls, text="Search", command=self.run_search).grid(row=1, column=5, padx=(0, 8))
-        ttk.Button(controls, text="Choose folders", command=self.choose_roots).grid(row=1, column=6, padx=(0, 8))
-        ttk.Button(controls, text="Scan / Rebuild index", command=self.start_indexing).grid(row=1, column=7)
+        ttk.Label(controls, text="Max MB").grid(row=0, column=5, sticky="w")
+        ttk.Entry(controls, textvariable=self.max_size_var, width=10).grid(row=1, column=5, padx=(0, 10))
+
+        ttk.Button(controls, text="Search", command=self.run_search).grid(row=1, column=6, padx=(0, 8))
+        ttk.Button(controls, text="Choose folders", command=self.choose_roots).grid(row=1, column=7, padx=(0, 8))
+        ttk.Button(controls, text="Scan / Rebuild index", command=self.start_indexing).grid(row=1, column=8)
 
         controls.columnconfigure(0, weight=1)
 
@@ -78,19 +104,23 @@ class FileSearchApp(tk.Tk):
         status.pack(fill=tk.X)
 
     def refresh_filter_options(self) -> None:
-        try:
-            conn = connect_db()
-            drives, extensions = list_filter_options(conn)
-            conn.close()
-        except Exception:
-            drives, extensions = [], []
+        drives = available_windows_drives()
 
         self.drive_combo["values"] = ["Any", *drives]
-        self.extension_combo["values"] = ["Any", *extensions]
+        self.extension_combo["values"] = COMMON_FILE_TYPES
         if self.drive_var.get() not in self.drive_combo["values"]:
             self.drive_var.set("Any")
         if self.extension_var.get() not in self.extension_combo["values"]:
             self.extension_var.set("Any")
+        self.toggle_custom_extension()
+
+    def toggle_custom_extension(self) -> None:
+        if self.extension_var.get() == "Other":
+            self.custom_extension_entry.configure(state="normal")
+            self.custom_extension_entry.focus_set()
+        else:
+            self.custom_extension_var.set("")
+            self.custom_extension_entry.configure(state="disabled")
 
     def choose_roots(self) -> None:
         folder = filedialog.askdirectory(title="Choose a folder to scan")
@@ -126,9 +156,14 @@ class FileSearchApp(tk.Tk):
             messagebox.showerror("Invalid filter", "Size filters must be numbers.")
             return
 
+        extension = self.get_selected_extension()
+        if extension == "INVALID":
+            messagebox.showerror("Invalid filter", "Other file type should look like .md or .json.")
+            return
+
         filters = SearchFilters(
             drive=None if self.drive_var.get() == "Any" else self.drive_var.get(),
-            extension=None if self.extension_var.get() == "Any" else self.extension_var.get(),
+            extension=extension,
             min_size_mb=min_size,
             max_size_mb=max_size,
         )
@@ -157,7 +192,10 @@ class FileSearchApp(tk.Tk):
                     item["path"],
                 ),
             )
-        self.status_var.set(f"{len(results)} results")
+        if results:
+            self.status_var.set(f"{len(results)} results")
+        else:
+            self.status_var.set("0 results. If this is the first run, choose a folder and click Scan / Rebuild index.")
 
     def open_selected_file(self, _event: tk.Event) -> None:
         selected = self.tree.selection()
@@ -165,7 +203,10 @@ class FileSearchApp(tk.Tk):
             return
         path = self.tree.item(selected[0], "values")[-1]
         try:
-            os.startfile(path)
+            if os.name == "nt":
+                subprocess.Popen(["explorer", "/select,", path])
+            else:
+                os.startfile(path)
         except Exception as exc:
             messagebox.showerror("Open failed", str(exc))
 
@@ -175,6 +216,20 @@ class FileSearchApp(tk.Tk):
         if not value:
             return None
         return float(value)
+
+    def get_selected_extension(self) -> str | None:
+        selected = self.extension_var.get()
+        if selected == "Any":
+            return None
+        if selected != "Other":
+            return selected
+
+        custom = self.custom_extension_var.get().strip().lower()
+        if not custom:
+            return None
+        if not custom.startswith(".") or len(custom) < 2:
+            return "INVALID"
+        return custom
 
 
 if __name__ == "__main__":
