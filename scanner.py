@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import os
 import string
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Iterable, Iterator, List, Optional, Set
 
 from config import DEFAULT_SKIP_DIR_NAMES
+from content_extractor import extract_file_text
 from text_utils import expand_text_for_search
 
 
@@ -19,15 +20,21 @@ class FileRecord:
     parent: str
     size_bytes: int
     modified_ts: float
+    content_text: str = ""
 
     @property
     def semantic_text(self) -> str:
         stem = Path(self.name).stem.replace("_", " ").replace("-", " ")
-        return expand_text_for_search(f"{stem} {self.extension} {self.parent}")
+        return expand_text_for_search(f"{stem} {self.extension} {self.parent} {self.content_text}")
 
     @property
     def search_text(self) -> str:
-        return self.semantic_text
+        return expand_text_for_search(f"{self.name} {self.extension} {self.parent} {self.content_text}")
+
+    def with_content(self) -> "FileRecord":
+        if self.content_text:
+            return self
+        return replace(self, content_text=extract_file_text(self.path, self.extension))
 
 
 def available_windows_drives() -> List[str]:
@@ -48,6 +55,7 @@ def should_skip_dir(path: str, skip_dir_names: Optional[Set[str]] = None) -> boo
 def iter_files(
     roots: Optional[Iterable[str]] = None,
     skip_dir_names: Optional[Set[str]] = None,
+    extract_content: bool = True,
 ) -> Iterator[FileRecord]:
     roots = list(roots or available_windows_drives())
     skip_dir_names = skip_dir_names or DEFAULT_SKIP_DIR_NAMES
@@ -68,6 +76,7 @@ def iter_files(
 
                 drive = os.path.splitdrive(path)[0] or Path(path).anchor
                 extension = Path(filename).suffix.lower()
+                content_text = extract_file_text(path, extension) if extract_content else ""
                 yield FileRecord(
                     path=path,
                     name=filename,
@@ -76,4 +85,5 @@ def iter_files(
                     parent=dirpath,
                     size_bytes=int(stat.st_size),
                     modified_ts=float(stat.st_mtime),
+                    content_text=content_text,
                 )

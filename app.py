@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from typing import Optional
 
-from indexer import build_index
+from indexer import build_index, has_index, sync_index
 from scanner import available_windows_drives
 from search import SearchFilters, clear_semantic_cache, search_files
 
@@ -46,9 +46,13 @@ class FileSearchApp(tk.Tk):
         self.max_size_var = tk.StringVar()
         self.query_var = tk.StringVar()
         self.status_var = tk.StringVar(value="就绪")
+        self.indexing = False
+        self.auto_sync_interval_ms = 10 * 60 * 1000
 
         self._build_ui()
         self.refresh_filter_options()
+        self.after(800, self.ensure_initial_index)
+        self.after(self.auto_sync_interval_ms, self.schedule_auto_sync)
 
     def _build_ui(self) -> None:
         controls = ttk.Frame(self, padding=12)
@@ -130,25 +134,50 @@ class FileSearchApp(tk.Tk):
             self.selected_roots = [folder]
             self.status_var.set(f"已选择扫描目录：{folder}")
 
-    def start_indexing(self) -> None:
-        self.status_var.set("正在扫描文件并重建索引...")
-        thread = threading.Thread(target=self._index_worker, daemon=True)
+    def ensure_initial_index(self) -> None:
+        if not has_index():
+            self.start_indexing(auto=True)
+
+    def schedule_auto_sync(self) -> None:
+        if not self.indexing and has_index():
+            self.start_indexing(auto=True, incremental=True)
+        self.after(self.auto_sync_interval_ms, self.schedule_auto_sync)
+
+    def start_indexing(self, auto: bool = False, incremental: bool = False) -> None:
+        if self.indexing:
+            return
+        self.indexing = True
+        if incremental:
+            self.status_var.set("正在后台同步索引...")
+        elif auto:
+            self.status_var.set("首次启动，正在自动构建索引...")
+        else:
+            self.status_var.set("正在扫描文件并重建索引...")
+        thread = threading.Thread(target=self._index_worker, args=(incremental,), daemon=True)
         thread.start()
 
-    def _index_worker(self) -> None:
+    def _index_worker(self, incremental: bool = False) -> None:
         def progress(count: int, path: str) -> None:
             self.after(0, lambda: self.status_var.set(f"已索引 {count} 个文件：{path}"))
 
         try:
-            total = build_index(roots=self.selected_roots, progress=progress)
+            if incremental:
+                total = sync_index(roots=self.selected_roots, progress=progress)
+            else:
+                total = build_index(roots=self.selected_roots, progress=progress)
         except Exception as exc:
             self.after(0, lambda: messagebox.showerror("索引失败", str(exc)))
             self.after(0, lambda: self.status_var.set("索引失败"))
+            self.after(0, self._finish_indexing)
             return
 
         clear_semantic_cache()
         self.after(0, self.refresh_filter_options)
-        self.after(0, lambda: self.status_var.set(f"索引完成：{total} 个文件"))
+        self.after(0, lambda: self.status_var.set(f"索引已更新：{total} 个文件"))
+        self.after(0, self._finish_indexing)
+
+    def _finish_indexing(self) -> None:
+        self.indexing = False
 
     def run_search(self) -> None:
         try:
@@ -190,7 +219,7 @@ class FileSearchApp(tk.Tk):
                     item["extension"],
                     item["drive"],
                     item["size_mb"],
-                    item["score"],
+                    f"{item['score'] * 100:.0f}%",
                     item["path"],
                 ),
             )

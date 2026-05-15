@@ -1,12 +1,15 @@
 # Semantic File Search for Windows
 
-一个 Windows 桌面文件搜索原型：先扫描文件 metadata，使用文件名/路径文本构建本地向量索引，再用 metadata filter + semantic search 查询文件。
+一个 Windows 桌面文件搜索原型：先扫描文件 metadata 和部分文件正文，使用文件名/路径/正文文本构建本地向量索引，再用 metadata filter + semantic search 查询文件。
 
 ## Features
 
 - 扫描磁盘或指定文件夹
 - 保存文件 metadata 到 SQLite
-- 使用文件名、扩展名、父目录生成轻量 embedding
+- 使用文件名、扩展名、父目录和可提取正文生成轻量 embedding
+- 提取 `.pdf`、`.docx` 和常见纯文本文件内容参与查询
+- 支持完整拼音和常见模糊拼音，不使用拼音首字母简写
+- 首次启动自动构建索引，运行时定期后台同步文件变化
 - 使用 NumPy 做 semantic search
 - 支持 metadata filters:
   - 磁盘位置
