@@ -23,8 +23,10 @@ jobs:
 
       - name: Install Python dependencies
         run: |
+          python --version
           python -m pip install --upgrade "pip<25"
           pip install -r requirements-legacy-win7.txt
+          python -m pip freeze
 
       - name: Build app with PyInstaller
         run: pyinstaller --clean SemanticFileSearch.spec
@@ -33,7 +35,7 @@ jobs:
         run: choco install innosetup --yes
 
       - name: Build installer
-        run: iscc /DMyAppOutputBaseFilename=SemanticFileSearchSetup-Win7 installer.iss
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppOutputBaseFilename=SemanticFileSearchSetup-Win7 installer.iss'
 
       - name: Upload portable app
         uses: actions/upload-artifact@v4
