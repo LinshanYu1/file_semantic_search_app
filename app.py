@@ -5,6 +5,7 @@ import subprocess
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+from typing import Optional
 
 from indexer import build_index
 from scanner import available_windows_drives
@@ -212,13 +213,13 @@ class FileSearchApp(tk.Tk):
             messagebox.showerror("打开位置失败", str(exc))
 
     @staticmethod
-    def _parse_optional_float(value: str) -> float | None:
+    def _parse_optional_float(value: str) -> Optional[float]:
         value = value.strip()
         if not value:
             return None
         return float(value)
 
-    def get_selected_extension(self) -> str | None:
+    def get_selected_extension(self) -> Optional[str]:
         selected = self.extension_var.get()
         if selected == "Any":
             return None

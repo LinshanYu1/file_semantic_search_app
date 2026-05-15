@@ -4,7 +4,7 @@ import os
 import string
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator
+from typing import Iterable, Iterator, List, Optional, Set
 
 from config import DEFAULT_SKIP_DIR_NAMES
 from text_utils import expand_text_for_search
@@ -30,7 +30,7 @@ class FileRecord:
         return self.semantic_text
 
 
-def available_windows_drives() -> list[str]:
+def available_windows_drives() -> List[str]:
     drives = []
     for letter in string.ascii_uppercase:
         drive = f"{letter}:\\"
@@ -39,15 +39,15 @@ def available_windows_drives() -> list[str]:
     return drives or [str(Path.home())]
 
 
-def should_skip_dir(path: str, skip_dir_names: set[str] | None = None) -> bool:
+def should_skip_dir(path: str, skip_dir_names: Optional[Set[str]] = None) -> bool:
     skip_dir_names = skip_dir_names or DEFAULT_SKIP_DIR_NAMES
     name = os.path.basename(path).lower()
     return name in skip_dir_names
 
 
 def iter_files(
-    roots: Iterable[str] | None = None,
-    skip_dir_names: set[str] | None = None,
+    roots: Optional[Iterable[str]] = None,
+    skip_dir_names: Optional[Set[str]] = None,
 ) -> Iterator[FileRecord]:
     roots = list(roots or available_windows_drives())
     skip_dir_names = skip_dir_names or DEFAULT_SKIP_DIR_NAMES

@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable, Iterable, List, Optional
 
-import faiss
 import numpy as np
 from embedder import embed_texts
 
 
-from config import APP_DIR, DB_PATH, FAISS_PATH, IDS_PATH
+from config import APP_DIR, DB_PATH, IDS_PATH, VECTOR_PATH
 from scanner import FileRecord, iter_files
 
 
@@ -47,13 +46,13 @@ def reset_storage() -> sqlite3.Connection:
     conn = connect_db()
     conn.execute("DELETE FROM files")
     conn.commit()
-    for path in (FAISS_PATH, IDS_PATH):
+    for path in (APP_DIR / "files.faiss", APP_DIR / "faiss_ids.npy", VECTOR_PATH, IDS_PATH):
         if path.exists():
             path.unlink()
     return conn
 
 
-def save_records(conn: sqlite3.Connection, records: Iterable[FileRecord]) -> list[int]:
+def save_records(conn: sqlite3.Connection, records: Iterable[FileRecord]) -> List[int]:
     ids = []
     for record in records:
         cursor = conn.execute(
@@ -78,18 +77,18 @@ def save_records(conn: sqlite3.Connection, records: Iterable[FileRecord]) -> lis
 
 
 def build_index(
-    roots: list[str] | None = None,
+    roots: Optional[List[str]] = None,
     batch_size: int = 256,
-    progress: ProgressCallback | None = None,
+    progress: Optional[ProgressCallback] = None,
 ) -> int:
     conn = reset_storage()
-    index = None
-    all_ids: list[int] = []
-    batch_records: list[FileRecord] = []
+    all_ids: List[int] = []
+    all_vectors: List[np.ndarray] = []
+    batch_records: List[FileRecord] = []
     total = 0
 
     def flush_batch() -> None:
-        nonlocal index, total, batch_records
+        nonlocal total, batch_records
         if not batch_records:
             return
 
@@ -97,9 +96,7 @@ def build_index(
         texts = [record.semantic_text for record in batch_records]
         vectors = embed_texts(texts)
 
-        if index is None:
-            index = faiss.IndexFlatIP(vectors.shape[1])
-        index.add(vectors)
+        all_vectors.append(vectors)
         all_ids.extend(ids)
         total += len(batch_records)
 
@@ -117,7 +114,7 @@ def build_index(
     conn.commit()
     conn.close()
 
-    if index is not None:
-        faiss.write_index(index, str(FAISS_PATH))
+    if all_vectors:
+        np.save(VECTOR_PATH, np.vstack(all_vectors).astype("float32"))
         np.save(IDS_PATH, np.asarray(all_ids, dtype=np.int64))
     return total

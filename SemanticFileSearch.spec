@@ -6,7 +6,6 @@ hiddenimports = []
 for package in [
     "sklearn",
     "scipy",
-    "faiss",
     "pypinyin",
 ]:
     package_datas, package_binaries, package_hiddenimports = collect_all(package)
@@ -14,7 +13,6 @@ for package in [
     binaries += package_binaries
     hiddenimports += package_hiddenimports
 for package in [
-    "faiss-cpu",
     "numpy",
     "scikit-learn",
     "scipy",

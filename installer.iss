@@ -1,7 +1,12 @@
 #define MyAppName "Semantic File Search"
+#ifndef MyAppVersion
 #define MyAppVersion "0.1.0"
+#endif
 #define MyAppPublisher "Local"
 #define MyAppExeName "SemanticFileSearch.exe"
+#ifndef MyAppOutputBaseFilename
+#define MyAppOutputBaseFilename "SemanticFileSearchSetup"
+#endif
 [Setup]
 AppId={{2B7535D1-1A8B-4F63-9860-F1A13EC75691}
 AppName=文件快速搜索
@@ -11,12 +16,13 @@ DefaultDirName={localappdata}\Semantic File Search
 DefaultGroupName=文件快速搜索
 DisableProgramGroupPage=yes
 OutputDir=installer
-OutputBaseFilename=SemanticFileSearchSetup
+OutputBaseFilename={#MyAppOutputBaseFilename}
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
+MinVersion=6.1sp1
 PrivilegesRequired=lowest
 SetupIconFile=assets\search.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}

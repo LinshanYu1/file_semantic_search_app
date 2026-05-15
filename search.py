@@ -2,32 +2,32 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
 
-import faiss
 import numpy as np
-from config import FAISS_PATH, IDS_PATH
+from config import IDS_PATH, VECTOR_PATH
 from embedder import embed_texts
 from text_utils import expand_text_for_search
 
 from indexer import connect_db
 
 
-_INDEX: faiss.Index | None = None
-_IDS: np.ndarray | None = None
+_VECTORS: Optional[np.ndarray] = None
+_IDS: Optional[np.ndarray] = None
 
 
 
 @dataclass(frozen=True)
 class SearchFilters:
-    drive: str | None = None
-    extension: str | None = None
-    min_size_mb: float | None = None
-    max_size_mb: float | None = None
+    drive: Optional[str] = None
+    extension: Optional[str] = None
+    min_size_mb: Optional[float] = None
+    max_size_mb: Optional[float] = None
 
 
-def _where_clause(filters: SearchFilters) -> tuple[str, list[object]]:
+def _where_clause(filters: SearchFilters) -> Tuple[str, List[object]]:
     clauses = []
-    params: list[object] = []
+    params: List[object] = []
 
     if filters.drive:
         clauses.append("drive = ?")
@@ -47,7 +47,7 @@ def _where_clause(filters: SearchFilters) -> tuple[str, list[object]]:
     return "WHERE " + " AND ".join(clauses), params
 
 
-def list_filter_options(conn: sqlite3.Connection | None = None) -> tuple[list[str], list[str]]:
+def list_filter_options(conn: Optional[sqlite3.Connection] = None) -> Tuple[List[str], List[str]]:
     own_conn = conn is None
     conn = conn or connect_db()
     drives = [row[0] for row in conn.execute("SELECT DISTINCT drive FROM files ORDER BY drive")]
@@ -63,10 +63,10 @@ def list_filter_options(conn: sqlite3.Connection | None = None) -> tuple[list[st
 
 def search_files(
     query: str = "",
-    filters: SearchFilters | None = None,
+    filters: Optional[SearchFilters] = None,
     limit: int = 50,
     semantic_pool: int = 1000,
-) -> list[dict]:
+) -> List[Dict]:
     filters = filters or SearchFilters()
     conn = connect_db()
     where_sql, params = _where_clause(filters)
@@ -87,19 +87,25 @@ def search_files(
 
     literal_results = _literal_search(conn, query, where_sql, params, limit)
 
-    if not FAISS_PATH.exists() or not IDS_PATH.exists():
+    if not VECTOR_PATH.exists() or not IDS_PATH.exists():
         conn.close()
         return [_drop_internal_id(item) for item in literal_results]
 
-    index, ids = load_semantic_index()
+    vectors, ids = load_semantic_index()
     vector = embed_texts([expand_text_for_search(query)])
-    scores, positions = index.search(vector, min(semantic_pool, index.ntotal))
+    scores = vectors.dot(vector[0])
+    pool_size = min(semantic_pool, scores.shape[0])
+    if pool_size <= 0:
+        conn.close()
+        return [_drop_internal_id(item) for item in literal_results]
+    positions = np.argpartition(scores, -pool_size)[-pool_size:]
+    positions = positions[np.argsort(scores[positions])[::-1]]
 
     semantic_hits = []
-    for score, position in zip(scores[0], positions[0]):
+    for position in positions:
         if position < 0:
             continue
-        semantic_hits.append((int(ids[position]), float(score)))
+        semantic_hits.append((int(ids[position]), float(scores[position])))
 
     if not semantic_hits:
         conn.close()
@@ -136,9 +142,9 @@ def _literal_search(
     conn: sqlite3.Connection,
     query: str,
     where_sql: str,
-    params: list[object],
+    params: List[object],
     limit: int,
-) -> list[dict]:
+) -> List[Dict]:
     literal = query.strip().lower()
     terms = _query_terms(query)
     search_text_clauses = " OR ".join("LOWER(search_text) LIKE ? ESCAPE '\\'" for _ in terms)
@@ -176,7 +182,7 @@ def _literal_search(
     return results
 
 
-def _query_terms(query: str) -> list[str]:
+def _query_terms(query: str) -> List[str]:
     expanded = expand_text_for_search(query).lower()
     raw_terms = [query.strip().lower(), *expanded.split()]
     terms = []
@@ -199,19 +205,19 @@ def _like_pattern(value: str) -> str:
     return f"%{escaped}%"
 
 
-def load_semantic_index() -> tuple[faiss.Index, np.ndarray]:
-    global _INDEX, _IDS
-    if _INDEX is None:
-        _INDEX = faiss.read_index(str(FAISS_PATH))
+def load_semantic_index() -> Tuple[np.ndarray, np.ndarray]:
+    global _VECTORS, _IDS
+    if _VECTORS is None:
+        _VECTORS = np.load(VECTOR_PATH)
     if _IDS is None:
         _IDS = np.load(IDS_PATH)
-    return _INDEX, _IDS
+    return _VECTORS, _IDS
 
 
 
 def clear_semantic_cache() -> None:
-    global _INDEX, _IDS
-    _INDEX = None
+    global _VECTORS, _IDS
+    _VECTORS = None
     _IDS = None
 
 
